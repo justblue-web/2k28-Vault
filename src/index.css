@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+@keyframes shine {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+.group:hover .group-hover\:animate-\[shine_1\.2s_ease-in-out_infinite\] {
+  animation: shine 1.2s ease-in-out infinite;
+}
+
+/* Custom premium dark scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #030303;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #222222;
+  border-radius: 9999px;
+  border: 2px solid #030303;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555555;
+}
+

@@ -1,0 +1,6 @@
+{
+  "name": "2K28 Card Gallery",
+  "description": "A dark, responsive web gallery for displaying a custom 2K28 card set with quick search and an elegant fullscreen lightbox.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
