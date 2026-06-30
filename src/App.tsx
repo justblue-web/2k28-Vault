@@ -20,7 +20,6 @@ interface Photo {
   name: string;
   rawName: string;
   likes: number;
-  isVideo: boolean;
 }
 
 export default function App() {
@@ -56,13 +55,11 @@ export default function App() {
         // Map the files to photos
         const mappedPhotos = data.files.map((file: { id: string; name: string }) => {
           const currentLikes = localLikes[file.id] !== undefined ? localLikes[file.id] : 0;
-          const isVideoFile = /\.(mov|mp4|webm|m4v|avi|mkv)$/i.test(file.name);
           return {
             id: file.id,
             name: cleanFileName(file.name),
             rawName: file.name,
-            likes: currentLikes,
-            isVideo: isVideoFile
+            likes: currentLikes
           };
         });
         setPhotos(mappedPhotos);
@@ -91,8 +88,8 @@ export default function App() {
   // Clean file extensions or common suffixes for display names
   const cleanFileName = (name: string): string => {
     if (!name) return "Untitled Photo";
-    // Remove extensions like .jpg, .jpeg, .png, .gif, .mov, .mp4 case-insensitive
-    let cleaned = name.replace(/\.(jpg|jpeg|png|gif|webp|tiff|mov|mp4|webm|m4v)$/i, "");
+    // Remove extensions like .jpg, .jpeg, .png, .gif, .webp, .tiff case-insensitive
+    let cleaned = name.replace(/\.(jpg|jpeg|png|gif|webp|tiff)$/i, "");
     // Replace underscores, hyphens with spaces for clean typography
     cleaned = cleaned.replace(/[_-]/g, " ");
     return cleaned;
@@ -307,33 +304,15 @@ export default function App() {
                     className="break-inside-avoid inline-block w-full group relative flex flex-col bg-[#0b0b0b] border border-zinc-900 overflow-hidden cursor-pointer hover:border-zinc-750 transition-all duration-300 mb-8"
                     onClick={() => setSelectedPhotoIndex(index)}
                   >
-                    {/* PHOTO/VIDEO aspect container */}
+                    {/* PHOTO aspect container */}
                     <div className="relative bg-[#080808] overflow-hidden flex items-center justify-center">
-                      {photo.isVideo ? (
-                        <div className="relative w-full bg-black overflow-hidden group">
-                          <video
-                            src={`/api/video?id=${photo.id}`}
-                            preload="metadata"
-                            muted
-                            loop
-                            playsInline
-                            autoPlay
-                            className="w-full h-auto transition-all duration-700 ease-out group-hover:scale-105"
-                          />
-                          {/* Indicator that it's a video */}
-                          <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm text-white text-[9px] uppercase tracking-widest font-bold px-2 py-1 rounded border border-zinc-800">
-                            VIDEO
-                          </span>
-                        </div>
-                      ) : (
-                        <img
-                          src={directUrl}
-                          alt={photo.name}
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                          className="w-full h-auto object-contain transition-all duration-700 ease-out group-hover:scale-105"
-                        />
-                      )}
+                      <img
+                        src={directUrl}
+                        alt={photo.name}
+                        loading="lazy"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-auto object-contain transition-all duration-700 ease-out group-hover:scale-105"
+                      />
                       
                       {/* Dark Overlay on Hover */}
                       <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-6">
@@ -453,26 +432,16 @@ export default function App() {
               <ChevronLeft className="w-4 h-4" />
             </button>
 
-            {/* LIGHTBOX MAIN PHOTO/VIDEO CONTAINER */}
+            {/* LIGHTBOX MAIN PHOTO CONTAINER */}
             <div 
               className="relative max-w-4xl max-h-[75vh] w-full overflow-hidden border border-zinc-900 bg-black flex items-center justify-center rounded"
               onClick={(e) => e.stopPropagation()}
             >
-              {filteredPhotos[selectedPhotoIndex].isVideo ? (
-                <video
-                  src={`/api/video?id=${filteredPhotos[selectedPhotoIndex].id}`}
-                  controls
-                  autoPlay
-                  playsInline
-                  className="max-h-[75vh] max-w-full object-contain"
-                />
-              ) : (
-                <img
-                  src={`https://lh3.googleusercontent.com/d/${filteredPhotos[selectedPhotoIndex].id}`}
-                  alt={filteredPhotos[selectedPhotoIndex].name}
-                  className="max-h-[75vh] max-w-full object-contain"
-                />
-              )}
+              <img
+                src={`https://lh3.googleusercontent.com/d/${filteredPhotos[selectedPhotoIndex].id}`}
+                alt={filteredPhotos[selectedPhotoIndex].name}
+                className="max-h-[75vh] max-w-full object-contain"
+              />
             </div>
 
             {/* DESCRIPTION & CONTROLS LIGHTBOX FOOTER */}
@@ -498,7 +467,7 @@ export default function App() {
                   className="flex items-center gap-2 px-3 py-1.5 bg-zinc-950 hover:bg-zinc-900 border border-zinc-800 rounded text-[10px] uppercase font-bold tracking-wider text-zinc-300 hover:text-white transition-all"
                 >
                   <Download className="w-3 h-3" />
-                  <span>Download {filteredPhotos[selectedPhotoIndex].isVideo ? "Video" : "Photo"}</span>
+                  <span>Download Photo</span>
                 </button>
 
                 <button

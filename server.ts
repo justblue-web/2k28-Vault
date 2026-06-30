@@ -12,45 +12,88 @@ const FOLDER_ID = "1OSzZl54viZ6eHs_wFI7C2bISxJ5xyXHq";
 // API endpoints
 app.get("/api/photos", async (req, res) => {
   try {
-    const response = await fetch(FOLDER_URL, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9"
-      }
-    });
+    const apiKey = process.env.GOOGLE_DRIVE_API_KEY || process.env.GEMINI_API_KEY || "";
+    let files: { id: string; name: string }[] = [];
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch Google Drive folder: ${response.statusText}`);
-    }
-    
-    const html = await response.text();
-    const files: { id: string; name: string }[] = [];
-    
-    // Scrape files from HTML using robust regex
-    const trRegex = /<tr\s+data-selectable\s+data-id="([a-zA-Z0-9_-]{33,44})"/g;
-    let trMatch;
-    
-    while ((trMatch = trRegex.exec(html)) !== null) {
-      const id = trMatch[1];
-      if (id === FOLDER_ID) continue;
-      
-      const startIndex = trMatch.index;
-      const chunk = html.substring(startIndex, startIndex + 2500);
-      
-      // Find the filename in strong tag or tooltip
-      const nameMatch = chunk.match(/<strong\s+class="DNoYtb">([^<]+)<\/strong>/) || 
-                        chunk.match(/data-tooltip="([^"]+?)\s+Image"/);
-      
-      if (nameMatch) {
-        files.push({ id, name: nameMatch[1] });
-      } else {
-        const fallbackMatch = chunk.match(/data-tooltip="([^"]+?)"/);
-        if (fallbackMatch) {
-          files.push({ id, name: fallbackMatch[1] });
+    if (apiKey) {
+      try {
+        const driveApiUrl = `https://www.googleapis.com/drive/v3/files?q='${FOLDER_ID}'+in+parents+and+trashed=false&fields=files(id,name,mimeType)&key=${apiKey}`;
+        const driveRes = await fetch(driveApiUrl);
+        if (driveRes.ok) {
+          const data = await driveRes.json();
+          if (data.files && Array.isArray(data.files)) {
+            // Filter using the mimeType field: only include files where mimeType starts with "image/"
+            // Exclude anything where mimeType starts with "video/"
+            files = data.files
+              .filter((file: any) => {
+                const mime = file.mimeType || "";
+                return mime.startsWith("image/") && !mime.startsWith("video/");
+              })
+              .map((file: any) => ({
+                id: file.id,
+                name: file.name
+              }));
+            console.log(`Fetched ${files.length} photos using Google Drive API with mimeType filtering.`);
+          }
         } else {
-          files.push({ id, name: `Image_${id.substring(0, 6)}` });
+          console.warn("Drive API call returned status:", driveRes.status);
+        }
+      } catch (apiErr) {
+        console.error("Error calling Google Drive API, falling back to scraping:", apiErr);
+      }
+    }
+
+    // Fallback to scraping if files are empty
+    if (files.length === 0) {
+      const response = await fetch(FOLDER_URL, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept-Language": "en-US,en;q=0.9"
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch Google Drive folder: ${response.statusText}`);
+      }
+      
+      const html = await response.text();
+      
+      // Scrape files from HTML using robust regex
+      const trRegex = /<tr\s+data-selectable\s+data-id="([a-zA-Z0-9_-]{33,44})"/g;
+      let trMatch;
+      
+      while ((trMatch = trRegex.exec(html)) !== null) {
+        const id = trMatch[1];
+        if (id === FOLDER_ID) continue;
+        
+        const startIndex = trMatch.index;
+        const chunk = html.substring(startIndex, startIndex + 2500);
+        
+        // Find the filename in strong tag or tooltip
+        const nameMatch = chunk.match(/<strong\s+class="DNoYtb">([^<]+)<\/strong>/) || 
+                          chunk.match(/data-tooltip="([^"]+?)\s+Image"/);
+        
+        let name = "";
+        if (nameMatch) {
+          name = nameMatch[1];
+        } else {
+          const fallbackMatch = chunk.match(/data-tooltip="([^"]+?)"/);
+          if (fallbackMatch) {
+            name = fallbackMatch[1];
+          } else {
+            name = `Image_${id.substring(0, 6)}`;
+          }
+        }
+        
+        // Only include image files by testing extension (and not matching video extension)
+        const isImage = /\.(jpg|jpeg|png|gif|webp|tiff)$/i.test(name);
+        const isVideo = /\.(mov|mp4|webm|m4v|avi|mkv)$/i.test(name);
+        
+        if (isImage && !isVideo) {
+          files.push({ id, name });
         }
       }
+      console.log(`Scraped ${files.length} photos from Google Drive folder HTML with extension filtering.`);
     }
     
     res.json({ success: true, files });
@@ -88,57 +131,6 @@ app.get("/api/download", async (req, res) => {
   } catch (error: any) {
     console.error("Download error:", error);
     res.status(500).send("Error downloading file");
-  }
-});
-
-// Proxy route to stream video files directly with range support
-app.get("/api/video", async (req, res) => {
-  const fileId = req.query.id as string;
-  if (!fileId) {
-    res.status(400).send("File ID is required");
-    return;
-  }
-
-  const driveUrl = `https://docs.google.com/uc?export=download&id=${fileId}`;
-
-  try {
-    const rangeHeader = req.headers.range;
-    const fetchHeaders: Record<string, string> = {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    };
-
-    if (rangeHeader) {
-      fetchHeaders["Range"] = rangeHeader;
-    }
-
-    const driveResponse = await fetch(driveUrl, { headers: fetchHeaders });
-
-    res.status(driveResponse.status);
-    
-    for (const [key, val] of driveResponse.headers.entries()) {
-      const lowerKey = key.toLowerCase();
-      if (["content-type", "content-length", "content-range", "accept-ranges"].includes(lowerKey)) {
-        res.setHeader(key, val);
-      }
-    }
-
-    const contentType = res.getHeader("content-type") as string;
-    if (!contentType || contentType.includes("text/html")) {
-      res.setHeader("content-type", "video/mp4");
-    }
-
-    if (driveResponse.body) {
-      // @ts-ignore
-      for await (const chunk of driveResponse.body) {
-        res.write(chunk);
-      }
-    }
-    res.end();
-  } catch (error: any) {
-    console.error("Video stream proxy error:", error);
-    if (!res.headersSent) {
-      res.status(500).send("Error streaming video");
-    }
   }
 });
 
